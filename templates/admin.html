@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <h2>Manage Names</h2>
+        <div class="mb-3">
+            <input type="text" id="new-name" class="form-control" placeholder="Enter name">
+            <button id="add-name" class="btn btn-primary mt-2">Add Name</button>
+        </div>
+        <div class="list-group" id="names-list">
+            {% for name in names %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>{{ name.name }}</span>
+                <div>
+                    <button class="btn btn-sm btn-warning edit-name" data-id="{{ name.id }}">Edit</button>
+                    <button class="btn btn-sm btn-danger delete-name" data-id="{{ name.id }}">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <h2>Lock Result</h2>
+        <div class="mb-3">
+            <select id="lock-result" class="form-control">
+                <option value="">Select name to lock</option>
+                {% for name in names %}
+                <option value="{{ name.name }}">{{ name.name }}</option>
+                {% endfor %}
+            </select>
+            <button id="set-lock" class="btn btn-warning mt-2">Lock Result</button>
+        </div>
+        {% if config and config.locked_result %}
+        <div class="alert alert-warning">
+            Current locked result: {{ config.locked_result }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.getElementById('add-name').addEventListener('click', async () => {
+    const nameInput = document.getElementById('new-name');
+    const name = nameInput.value.trim();
+    if (name) {
+        await fetch('/api/admin/names', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name})
+        });
+        location.reload();
+    }
+});
+
+document.querySelectorAll('.delete-name').forEach(button => {
+    button.addEventListener('click', async () => {
+        const id = button.dataset.id;
+        await fetch('/api/admin/names', {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id})
+        });
+        location.reload();
+    });
+});
+
+document.querySelectorAll('.edit-name').forEach(button => {
+    button.addEventListener('click', async () => {
+        const id = button.dataset.id;
+        const nameSpan = button.parentElement.previousElementSibling;
+        const newName = prompt('Enter new name:', nameSpan.textContent);
+        if (newName) {
+            await fetch('/api/admin/names', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id, name: newName})
+            });
+            location.reload();
+        }
+    });
+});
+
+document.getElementById('set-lock').addEventListener('click', async () => {
+    const select = document.getElementById('lock-result');
+    const result = select.value;
+    if (result) {
+        await fetch('/api/admin/lock-result', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({result})
+        });
+        location.reload();
+    }
+});
+</script>
+{% endblock %}

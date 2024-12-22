@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Import Names Section (Left) -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow">
+                <div class="card-header bg-light">
+                    <h3 class="mb-0">Import Names</h3>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">Upload Excel (.xlsx, .xls) or CSV files to add names to the wheel</p>
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <div class="mb-4">
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="file-input" accept=".csv,.xlsx,.xls">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-upload me-2"></i>Upload
+                                </button>
+                            </div>
+                            <small class="text-muted mt-2 d-block">
+                                Names should be in the first column of your file
+                            </small>
+                        </div>
+                    </form>
+                    <div id="upload-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wheel Section (Center) -->
+        <div class="col-md-8 text-center">
+            <div class="wheel-container mb-4">
+                <canvas id="wheel" width="500" height="500"></canvas>
+                <button id="spin-button" class="btn btn-primary btn-lg mt-3">Spin the Wheel</button>
+            </div>
+            <div id="result" class="mt-4 h3 d-none"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Result Modal -->
+<div class="modal fade" id="resultModal" tabindex="-1" aria-labelledby="resultModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="resultModalLabel">The Wheel Has Spoken!</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <div class="display-1 mb-4">
+                    <i class="fas fa-trophy text-warning"></i>
+                </div>
+                <h2 class="mb-4" id="modalResult"></h2>
+                <div class="confetti-container"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary">Remove</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script src="{{ url_for('static', filename='js/wheel.js') }}"></script>
+<script>
+// File upload handling
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fileInput = document.getElementById('file-input');
+    const statusDiv = document.getElementById('upload-status');
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    
+    if (!fileInput.files.length) {
+        statusDiv.innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                Please select a file
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>`;
+        return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        statusDiv.innerHTML = `
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                Uploading file...
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>`;
+
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    ${result.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>`;
+            fileInput.value = '';
+            window.location.reload();
+        } else {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    ${result.error}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                Error uploading file. Please try again.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>`;
+    } finally {
+        submitButton.disabled = false;
+        submitButton.innerHTML = '<i class="fas fa-upload me-2"></i>Upload';
+    }
+});
+
+document.getElementById('file-input').addEventListener('change', () => {
+    document.getElementById('upload-status').innerHTML = '';
+});
+
+// Result modal handling
+let resultModal = null;
+let resultName = null;
+function showResult(result) {
+    const modalResult = document.getElementById('modalResult');
+    modalResult.textContent = result;
+    resultName = result;
+    // Clean up existing modal if it exists
+    if (resultModal) {
+        resultModal.dispose();
+    }
+    
+    // Create new modal instance
+    resultModal = new bootstrap.Modal(document.getElementById('resultModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
+    
+    // Add event listener for when modal is hidden
+    document.getElementById('resultModal').addEventListener('hidden.bs.modal', function () {
+        if (resultModal) {
+            resultModal.dispose();
+            resultModal = null;
+        }
+    }, { once: true });
+    
+    resultModal.show();
+    
+    // Trigger confetti effect
+    confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+    });
+}
+
+// Handle modal spin again button
+document.querySelector('#resultModal .btn-primary').addEventListener('click', function(e) {
+    e.preventDefault();
+    if (resultModal) {
+        resultModal.hide();
+    }
+    wheel.remove(resultName);
+    setTimeout(() => {
+        //wheel.spin()
+    }, 500);
+});
+</script>
+{% endblock %}
